@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modeling Acoustic Echo as LTI Delay Systems — Live DSP Simulator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono for Math/DSP -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            slate: {
+              850: '#131c2e',
+              925: '#0a0f1d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #080d1a;
+      color: #f1f5f9;
+      overflow-x: hidden;
+    }
+    /* Custom Range Sliders */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 8px;
+      border-radius: 999px;
+      background: #1e293b;
+      border: 1px solid #334155;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 20px;
+      width: 20px;
+      border-radius: 50%;
+      margin-top: -7px;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    input[type="range"]:hover::-webkit-slider-thumb {
+      transform: scale(1.12);
+    }
+    .slider-cyan::-webkit-slider-thumb {
+      background: #22d3ee;
+      border: 2px solid #ecfeff;
+      box-shadow: 0 0 12px rgba(34, 211, 238, 0.6);
+    }
+    .slider-amber::-webkit-slider-thumb {
+      background: #f59e0b;
+      border: 2px solid #fffbeb;
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
+    }
+    .slider-emerald::-webkit-slider-thumb {
+      background: #10b981;
+      border: 2px solid #ecfdf5;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.65);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-cyan-500 selection:text-slate-950">
+
+  <!-- TOP HEADER & LIVE MATHEMATICAL EQUATION BANNER -->
+  <header class="border-b border-slate-800/80 bg-slate-925/90 sticky top-0 z-30 backdrop-blur-md">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+      
+      <!-- Title & Presentation Badge -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-amber-500/20 border border-cyan-500/40 flex items-center justify-center shadow-inner">
+          <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-mono uppercase tracking-widest px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-semibold">LTI Delay System</span>
+            <span class="text-xs text-slate-400 hidden sm:inline">Speed of Sound v ≈ 343 m/s</span>
+          </div>
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white">
+            Modeling Acoustic Echo as an LTI System
+          </h1>
+        </div>
+      </div>
+
+      <!-- Live Dynamic Formula Display -->
+      <div class="flex flex-wrap items-center gap-2 sm:gap-4 bg-slate-900/95 border border-slate-700/80 rounded-xl px-3.5 py-2 shadow-lg">
+        <div class="font-mono text-xs sm:text-sm md:text-base flex items-center flex-wrap gap-1">
+          <span class="text-emerald-400 font-bold" title="Output Signal">y(t)</span>
+          <span class="text-slate-400">=</span>
+          <span id="eqDirectTerm" class="text-cyan-400 font-semibold transition-opacity duration-200" title="Direct Input Signal">x(t)</span>
+          <span id="eqPlusSign" class="text-slate-400">+</span>
+          <span id="eqEchoTerm" class="transition-opacity duration-200">
+            <span id="eqAlphaVal" class="text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">0.60</span>
+            <span class="text-slate-300">·</span>
+            <span class="text-amber-300 font-semibold">x(t − <span id="eqTauVal" class="text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">0.099s</span>)</span>
+          </span>
+          <span id="eqFeedbackTerm" class="hidden text-purple-400 font-semibold ml-1 text-xs sm:text-sm">
+            + α²x(t−2τ) + …
+          </span>
+        </div>
+
+        <div class="h-5 w-[1px] bg-slate-700 hidden sm:block"></div>
+
+        <!-- Impulse Response Formula Pill -->
+        <div class="font-mono text-xs sm:text-sm text-slate-300 hidden xl:flex items-center gap-1">
+          <span class="text-slate-400">h(t) =</span>
+          <span class="text-cyan-400">δ(t)</span>
+          <span>+</span>
+          <span id="eqImpulseAlpha" class="text-amber-400 font-semibold">0.60</span><span class="text-amber-300">δ(t − <span id="eqImpulseTau">0.099s</span>)</span>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT GRID -->
+  <main class="max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-5 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+    <!-- LEFT COLUMN: AUDIO SOURCES, LTI PARAMETERS & LINEARITY CONTROLS (5 Cols) -->
+    <div class="lg:col-span-5 flex flex-col gap-5">
+
+      <!-- CARD 1: AUDIO INPUT SOURCE x(t) -->
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-xl relative overflow-hidden">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">1. Input Signal Source <span class="font-mono text-cyan-400">x(t)</span></h2>
+          </div>
+          <span id="audioStatusBadge" class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+            Ready
+          </span>
+        </div>
+
+        <!-- Primary Trigger Buttons (100% Offline Synthesized + Recorded Voice) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-3">
+          <!-- Impulse / Hand Clap -->
+          <button id="btnTriggerClap" class="group relative flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/90 hover:bg-cyan-950/60 border border-slate-700 hover:border-cyan-500/60 transition-all active:scale-95 text-center">
+            <span class="text-lg mb-0.5">👏</span>
+            <span class="text-xs font-semibold text-white group-hover:text-cyan-300">Impulse Clap</span>
+            <span class="text-[10px] font-mono text-slate-400">Tests h(t) = δ(t)</span>
+          </button>
+
+          <!-- Vocal "Hello!" Synth -->
+          <button id="btnTriggerVoiceSynth" class="group relative flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/90 hover:bg-cyan-950/60 border border-slate-700 hover:border-cyan-500/60 transition-all active:scale-95 text-center">
+            <span class="text-lg mb-0.5">🗣️</span>
+            <span class="text-xs font-semibold text-white group-hover:text-cyan-300">Shout "Hello!"</span>
+            <span class="text-[10px] font-mono text-slate-400">Formant Burst</span>
+          </button>
+
+          <!-- Acoustic Guitar / Sonar Pluck -->
+          <button id="btnTriggerPluck" class="col-span-2 sm:col-span-1 group relative flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/90 hover:bg-cyan-950/60 border border-slate-700 hover:border-cyan-500/60 transition-all active:scale-95 text-center">
+            <span class="text-lg mb-0.5">🎸</span>
+            <span class="text-xs font-semibold text-white group-hover:text-cyan-300">Acoustic Chord</span>
+            <span class="text-[10px] font-mono text-slate-400">Musical Transient</span>
+          </button>
+        </div>
+
+        <!-- Podium Microphone Recording & Custom File Upload -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-slate-800">
+          <!-- Record 2.5s Voice Clip -->
+          <div class="flex gap-1.5">
+            <button id="btnRecordMic" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/40 text-xs font-semibold transition-all active:scale-95">
+              <span id="micDot" class="w-2 h-2 rounded-full bg-rose-400"></span>
+              <span id="btnRecordMicText">Record 2.5s Mic</span>
+            </button>
+            <button id="btnPlayRecorded" disabled class="px-3 py-2.5 rounded-xl bg-slate-800 text-slate-500 border border-slate-700 text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:bg-emerald-500/20 hover:enabled:text-emerald-300 hover:enabled:border-emerald-500/40">
+              ▶ Play Mic
+            </button>
+          </div>
+
+          <!-- Upload Audio File (.mp3 / .wav) -->
+          <div class="flex items-center gap-1.5">
+            <label for="fileUploadInput" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold cursor-pointer transition-all truncate">
+              <span>📂</span>
+              <span id="fileUploadLabel" class="truncate">Load Audio File</span>
+            </label>
+            <input id="fileUploadInput" type="file" accept="audio/*" class="hidden" />
+            <button id="btnPlayUploaded" disabled class="px-3 py-2.5 rounded-xl bg-slate-800 text-slate-500 border border-slate-700 text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:bg-cyan-500/20 hover:enabled:text-cyan-300 hover:enabled:border-cyan-500/40">
+              ▶ Play
+            </button>
+          </div>
+        </div>
+
+        <!-- Auto-Repeat Loop Toggle & Live Mic Pass-Through -->
+        <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+          <label class="inline-flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="chkAutoLoop" class="sr-only peer">
+            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all relative peer-checked:bg-cyan-500"></div>
+            <span class="text-xs font-medium text-slate-300">Auto-Repeat Pulse (Every 2.2s)</span>
+          </label>
+
+          <button id="btnLiveMicToggle" class="text-xs font-mono px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1.5" title="Use headphones to avoid speaker feedback">
+            <span>🎙️ Live Mic Pass-Through: <strong id="liveMicStateText" class="text-slate-400">OFF</strong></span>
+          </button>
+        </div>
+      </section>
+
+      <!-- CARD 2: COUPLED PHYSICS & LTI SYSTEM PARAMETERS (d, τ, α) -->
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">
+            2. Coupled Physics & LTI Parameters
+          </h2>
+          <span class="text-[11px] font-mono text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+            τ = 2d / 343
+          </span>
+        </div>
+
+        <!-- Quick Slide Presets -->
+        <div class="mb-4">
+          <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400 block mb-1.5">Presentation Presets:</span>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            <button data-preset="slide" class="preset-btn px-2.5 py-2 rounded-lg text-xs font-medium bg-cyan-500/20 text-cyan-200 border border-cyan-500/50 hover:bg-cyan-500/30 transition text-left">
+              <div class="font-bold">Slide Example</div>
+              <div class="text-[10px] font-mono opacity-80">17m • 100ms • α=0.6</div>
+            </button>
+            <button data-preset="room" class="preset-btn px-2.5 py-2 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700/70 transition text-left">
+              <div class="font-bold">Small Room</div>
+              <div class="text-[10px] font-mono opacity-80">6m • 35ms • α=0.7</div>
+            </button>
+            <button data-preset="hall" class="preset-btn px-2.5 py-2 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700/70 transition text-left">
+              <div class="font-bold">Empty Hall</div>
+              <div class="text-[10px] font-mono opacity-80">43m • 250ms • α=0.5</div>
+            </button>
+            <button data-preset="canyon" class="preset-btn px-2.5 py-2 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700/70 transition text-left">
+              <div class="font-bold">Canyon Wall</div>
+              <div class="text-[10px] font-mono opacity-80">103m • 600ms • α=0.45</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- SLIDER 1: Wall Distance (d) -->
+        <div class="mb-4 p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+          <div class="flex justify-between items-baseline mb-1.5">
+            <label for="sliderDistance" class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <span>🧱 Wall Distance <code class="text-cyan-400 font-mono">d</code></span>
+            </label>
+            <div class="font-mono text-xs">
+              <span id="valDistance" class="text-sm font-bold text-cyan-400">17.0</span> <span class="text-slate-400">m</span>
+              <span class="text-slate-500 mx-1">|</span>
+              <span class="text-[11px] text-slate-400">Round-trip <code class="text-slate-200">2d</code> = <span id="valRoundTrip" class="text-cyan-300">34.0</span> m</span>
+            </div>
+          </div>
+          <input id="sliderDistance" type="range" min="1.5" max="150" step="0.5" value="17.0" class="w-full slider-cyan" />
+          <div class="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
+            <span>1.5 m (Near Wall)</span>
+            <span>17 m (Slide Ex.)</span>
+            <span>85 m</span>
+            <span>150 m (Far Hill)</span>
+          </div>
+        </div>
+
+        <!-- SLIDER 2: Time Delay (τ) -->
+        <div class="mb-4 p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+          <div class="flex justify-between items-baseline mb-1.5">
+            <label for="sliderTau" class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <span>⏱️ Echo Time Delay <code class="text-amber-400 font-mono">τ</code></span>
+            </label>
+            <div class="font-mono text-xs">
+              <span id="valTauSec" class="text-sm font-bold text-amber-400">0.099</span> <span class="text-slate-400">s</span>
+              <span class="text-slate-500 mx-1">≈</span>
+              <span id="valTauMs" class="text-amber-300 font-semibold">99</span> <span class="text-slate-400">ms</span>
+            </div>
+          </div>
+          <input id="sliderTau" type="range" min="0.009" max="0.875" step="0.001" value="0.099" class="w-full slider-amber" />
+          <div class="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
+            <span>0.01 s (10 ms)</span>
+            <span>0.10 s (100 ms)</span>
+            <span>0.50 s (500 ms)</span>
+            <span>0.87 s (875 ms)</span>
+          </div>
+        </div>
+
+        <!-- SLIDER 3: Attenuation Factor (α) -->
+        <div class="p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+          <div class="flex justify-between items-baseline mb-1.5">
+            <label for="sliderAlpha" class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <span>📉 Echo Attenuation <code class="text-amber-400 font-mono">α</code> <span class="text-[10px] font-normal text-slate-400">(0 &lt; α &lt; 1)</span></span>
+            </label>
+            <div class="font-mono text-xs">
+              <span id="valAlpha" class="text-sm font-bold text-amber-400">0.60</span>
+              <span class="text-slate-500 mx-1">|</span>
+              <span id="valAlphaDb" class="text-[11px] text-slate-400">-4.4 dB</span>
+            </div>
+          </div>
+          <input id="sliderAlpha" type="range" min="0.0" max="0.95" step="0.01" value="0.60" class="w-full slider-amber" />
+          <div class="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
+            <span>0.0 (Anechoic / Absorbed)</span>
+            <span>0.50 (-6 dB)</span>
+            <span>0.95 (Hard Concrete Mirror)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- CARD 3: SUPERPOSITION & LTI ARCHITECTURE TOGGLES -->
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-2.5">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">
+            3. Prove LTI Superposition & Signal Flow
+          </h2>
+          <span class="text-[11px] font-mono text-emerald-400">a·x₁ + b·x₂ → a·y₁ + b·y₂</span>
+        </div>
+        <p class="text-xs text-slate-400 mb-3">
+          Isolate each branch live to prove the output <code class="text-emerald-300 font-mono">y(t)</code> is the linear sum of the Direct signal and the Delayed copy:
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <!-- Direct Signal Branch Toggle -->
+          <button id="btnToggleDirect" class="flex items-center justify-between p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/50 text-left transition">
+            <div>
+              <div class="text-xs font-bold text-cyan-300">Direct Path</div>
+              <div class="text-[11px] font-mono text-slate-300">x(t)</div>
+            </div>
+            <span id="badgeDirect" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-cyan-400 text-slate-950">ON</span>
+          </button>
+
+          <!-- Delayed Echo Branch Toggle -->
+          <button id="btnToggleEcho" class="flex items-center justify-between p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/50 text-left transition">
+            <div>
+              <div class="text-xs font-bold text-amber-300">Reflected Echo</div>
+              <div class="text-[11px] font-mono text-slate-300">α·x(t − τ)</div>
+            </div>
+            <span id="badgeEcho" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-400 text-slate-950">ON</span>
+          </button>
+
+          <!-- Multi-Bounce Feedback (FIR vs IIR Comparison) -->
+          <button id="btnToggleFeedback" class="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-left transition">
+            <div>
+              <div class="text-xs font-bold text-slate-300" id="titleFeedback">Multi-Wall</div>
+              <div class="text-[10px] font-mono text-slate-400">Single vs IIR</div>
+            </div>
+            <span id="badgeFeedback" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-slate-700 text-slate-300">1 ECHO</span>
+          </button>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- RIGHT COLUMN: REAL-TIME VISUALIZATIONS (7 Cols) -->
+    <div class="lg:col-span-7 flex flex-col gap-5">
+
+      <!-- VISUALIZER 1: ACOUSTIC ROOM GEOMETRY & WAVE PROPAGATION -->
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div>
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+              <span>Acoustic Propagation Path</span>
+              <span class="text-xs font-mono font-normal text-slate-400">(Direct vs. Reflected Wavefront)</span>
+            </h2>
+          </div>
+          <div class="flex items-center gap-3 text-xs font-mono">
+            <span class="flex items-center gap-1.5 text-cyan-400">
+              <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block"></span> Direct: 0 ms
+            </span>
+            <span class="flex items-center gap-1.5 text-amber-400">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> Reflected: +<span id="geomDelayLabel">99</span> ms
+            </span>
+          </div>
+        </div>
+
+        <div class="relative w-full h-44 sm:h-48 rounded-xl bg-slate-950/90 border border-slate-800/90 overflow-hidden">
+          <canvas id="canvasRoom"></canvas>
+        </div>
+      </section>
+
+      <!-- VISUALIZER 2: IMPULSE RESPONSE h(t) = δ(t) + α δ(t - τ) -->
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div>
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">
+              LTI Impulse Response <code class="text-cyan-400 font-mono">h(t) = δ(t) + α·δ(t − τ)</code>
+            </h2>
+            <p class="text-xs text-slate-400">
+              Convolution <code class="font-mono text-slate-300">y(t) = x(t) ∗ h(t)</code> shifts and scales the input signal at each impulse stem.
+            </p>
+          </div>
+          <div class="text-xs font-mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 text-slate-300">
+            System Type: <span id="systemTypeLabel" class="text-cyan-400 font-semibold">FIR (Finite Impulse)</span>
+          </div>
+        </div>
+
+        <div class="relative w-full h-44 sm:h-48 rounded-xl bg-slate-950/90 border border-slate-800/90 overflow-hidden">
+          <canvas id="canvasImpulse"></canvas>
+        </div>
+      </section>
+
+      <!-- VISUALIZER 3: REAL-TIME DUAL WAVEFORM OSCILLOSCOPE x(t), αx(t-τ), y(t) -->
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col flex-1">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div>
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">
+              Real-Time Signal History Monitor
+            </h2>
+            <p class="text-xs text-slate-400">
+              Observe <code class="text-amber-400 font-mono">α·x(t − τ)</code> arriving <span id="scopeDelayText" class="text-amber-300 font-mono">99 ms</span> after <code class="text-cyan-400 font-mono">x(t)</code> with amplitude scaled by <span id="scopeAlphaText" class="text-amber-300 font-mono">0.60</span>.
+            </p>
+          </div>
+
+          <!-- Legend & Freeze Button -->
+          <div class="flex flex-wrap items-center gap-3 text-xs font-mono">
+            <span class="flex items-center gap-1 text-cyan-400">
+              <span class="w-3 h-0.5 bg-cyan-400 inline-block"></span> x(t)
+            </span>
+            <span class="flex items-center gap-1 text-amber-400">
+              <span class="w-3 h-0.5 bg-amber-400 inline-block"></span> α·x(t−τ)
+            </span>
+            <span class="flex items-center gap-1 text-emerald-400">
+              <span class="w-3 h-0.5 bg-emerald-400 inline-block"></span> y(t)
+            </span>
+            <button id="btnFreezeScope" class="ml-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition text-[11px]">
+              ⏸ Freeze Graph
+            </button>
+          </div>
+        </div>
+
+        <div class="relative w-full h-52 sm:h-60 rounded-xl bg-slate-950/90 border border-slate-800/90 overflow-hidden">
+          <canvas id="canvasScope"></canvas>
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- FOOTER SUMMARY BAR MATCHING SLIDE CONCLUSION -->
+  <footer class="border-t border-slate-800/80 bg-slate-925/80 py-3 px-4 sm:px-6 text-xs text-slate-400">
+    <div class="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex flex-wrap items-center gap-4">
+        <span><strong class="text-slate-200">Linearity:</strong> Louder shout → proportionally louder echo</span>
+        <span class="hidden sm:inline text-slate-700">•</span>
+        <span><strong class="text-slate-200">Time-Invariance:</strong> Later shout → identically delayed echo</span>
+        <span class="hidden sm:inline text-slate-700">•</span>
+        <span><strong class="text-slate-200">Convolution:</strong> <code class="font-mono text-cyan-400">y(t) = ∫ x(λ)h(t − λ)dλ = x(t) + αx(t − τ)</code></span>
+      </div>
+      <div class="font-mono text-[11px] text-slate-500">
+        Interactive Web Audio DSP Simulator
+      </div>
+    </div>
+  </footer>
+
+  <!-- COMPLETE SELF-CONTAINED WEB AUDIO DSP & CANVAS ENGINE -->
+  <script>
+    (function () {
+      'use strict';
+
+      // ==========================================
+      // 1. PHYSICS & LTI SYSTEM STATE
+      // ==========================================
+      const SPEED_OF_SOUND = 343; // m/s
+
+      const state = {
+        distance: 17.0,        // Wall distance d in meters
+        tau: 0.099,            // Delay τ in seconds (2*17 / 343 ≈ 0.0991s)
+        alpha: 0.60,           // Attenuation factor α (0 to 0.95)
+        directEnabled: true,   // x(t) branch switch
+        echoEnabled: true,     // α x(t - τ) branch switch
+        multiFeedback: false,  // Single FIR echo vs Multi-reflection IIR
+        autoLoop: false,       // Auto trigger every 2.2 seconds
+        scopeFrozen: false,    // Freeze oscilloscope for classroom explanation
+        lastSourceType: 'clap',// 'clap' | 'voice' | 'pluck' | 'micClip' | 'file'
+        liveMicActive: false,
+        wavePulses: []         // Animated acoustic wavefronts in Room Geometry canvas
+      };
+
+      // ==========================================
+      // 2. WEB AUDIO API GRAPH ARCHITECTURE
+      // ==========================================
+      let audioCtx = null;
+      let inputBus = null;         // Receives raw x(t)
+      let directGainNode = null;   // Weight = 1.0 (or 0 if muted)
+      let delayNode = null;        // Delay = τ seconds
+      let echoGainNode = null;     // Weight = α (or 0 if muted)
+      let feedbackGainNode = null; // Weight = α * 0.65 when Multi-Bounce is ON
+      let outputBus = null;        // Sums y(t) = x(t) + α x(t - τ)
+
+      // Analysers for real-time envelope/waveform capture
+      let analyserDirect = null;
+      let analyserEcho = null;
+      let analyserOutput = null;
+
+      // Buffers for custom recorded voice & uploaded file
+      let recordedAudioBuffer = null;
+      let uploadedAudioBuffer = null;
+      let activeSourceNode = null;
+      let liveMicStream = null;
+      let liveMicSourceNode = null;
+      let autoLoopTimer = null;
+
+      function initAudioEngine() {
+        if (audioCtx) {
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+          return;
+        }
+
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass();
+
+        // Create nodes representing LTI Block Diagram
+        inputBus = audioCtx.createGain();
+        directGainNode = audioCtx.createGain();
+        delayNode = audioCtx.createDelay(2.0); // Max 2.0 sec delay
+        echoGainNode = audioCtx.createGain();
+        feedbackGainNode = audioCtx.createGain();
+        outputBus = audioCtx.createGain();
+
+        // Create Analysers for each signal branch
+        analyserDirect = audioCtx.createAnalyser();
+        analyserEcho = audioCtx.createAnalyser();
+        analyserOutput = audioCtx.createAnalyser();
+        [analyserDirect, analyserEcho, analyserOutput].forEach(an => {
+          an.fftSize = 1024;
+          an.smoothingTimeConstant = 0.2;
+        });
+
+        // Connect Direct Branch: inputBus -> directGainNode -> analyserDirect -> outputBus
+        inputBus.connect(directGainNode);
+        directGainNode.connect(analyserDirect);
+        directGainNode.connect(outputBus);
+
+        // Connect Delayed Branch: inputBus -> delayNode -> echoGainNode -> analyserEcho -> outputBus
+        inputBus.connect(delayNode);
+        delayNode.connect(echoGainNode);
+        echoGainNode.connect(analyserEcho);
+        echoGainNode.connect(outputBus);
+
+        // Optional Multi-Wall Feedback Loop: delayNode -> feedbackGainNode -> delayNode
+        delayNode.connect(feedbackGainNode);
+        feedbackGainNode.connect(delayNode);
+
+        // Connect Output Bus to Master Speakers & Output Analyser
+        outputBus.connect(analyserOutput);
+        outputBus.connect(audioCtx.destination);
+
+        syncAudioGraphParams();
+      }
+
+      function syncAudioGraphParams() {
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+
+        // Direct Gain (1.0 or 0.0)
+        directGainNode.gain.setTargetAtTime(state.directEnabled ? 1.0 : 0.0, now, 0.015);
+
+        // Delay Time τ
+        delayNode.delayTime.setTargetAtTime(state.tau, now, 0.02);
+
+        // Echo Attenuation α
+        const effectiveAlpha = state.echoEnabled ? state.alpha : 0.0;
+        echoGainNode.gain.setTargetAtTime(effectiveAlpha, now, 0.015);
+
+        // Multi-bounce feedback loop
+        const fbGain = (state.echoEnabled && state.multiFeedback) ? Math.min(state.alpha * 0.75, 0.85) : 0.0;
+        feedbackGainNode.gain.setTargetAtTime(fbGain, now, 0.015);
+      }
+
+      // ==========================================
+      // 3. SYNTHESIZED & RECORDED AUDIO GENERATORS
+      // ==========================================
+
+      // Spawn a visual acoustic wave in the Room Geometry diagram
+      function spawnAcousticPulse(peakAmplitude = 1.0) {
+        state.wavePulses.push({
+          elapsed: 0,      // seconds since emission
+          amp: peakAmplitude
+        });
+      }
+
+      // 3A. Synthesized Impulse Clap δ(t)
+      function triggerImpulseClap() {
+        initAudioEngine();
+        state.lastSourceType = 'clap';
+        setStatusBadge('Impulse δ(t) Triggered', 'cyan');
+        spawnAcousticPulse(1.0);
+
+        const now = audioCtx.currentTime;
+
+        // Short filtered noise burst + sharp transient click
+        const duration = 0.045;
+        const bufferSize = Math.floor(audioCtx.sampleRate * duration);
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          const env = Math.exp(-i / (bufferSize * 0.22));
+          data[i] = (Math.random() * 2 - 1) * env * 0.95;
+        }
+
+        const noiseSource = audioCtx.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(1350, now);
+        filter.Q.setValueAtTime(1.8, now);
+
+        // Add a punchy body pop so laptop/classroom speakers reproduce it clearly
+        const osc = audioCtx.createOscillator();
+        const oscGain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(280, now);
+        osc.frequency.exponentialRampToValueAtTime(70, now + 0.035);
+
+        oscGain.gain.setValueAtTime(0.8, now);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+
+        noiseSource.connect(filter);
+        filter.connect(inputBus);
+
+        osc.connect(oscGain);
+        oscGain.connect(inputBus);
+
+        noiseSource.start(now);
+        osc.start(now);
+        osc.stop(now + 0.04);
+      }
+
+      // 3B. Synthesized Vocal "Hello!" Two-Syllable Formant Shout
+      function triggerVocalShout() {
+        initAudioEngine();
+        state.lastSourceType = 'voice';
+        setStatusBadge('Shout "Hello!" Triggered', 'cyan');
+        spawnAcousticPulse(0.95);
+
+        const now = audioCtx.currentTime;
+        const totalDur = 0.26;
+
+        // Fundamental glottal source (sawtooth rich in harmonics)
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        osc1.type = 'sawtooth';
+        osc2.type = 'sawtooth';
+
+        // Pitch contour: "Hel-" (210 Hz) -> "-lo!" (260 Hz -> 195 Hz)
+        osc1.frequency.setValueAtTime(210, now);
+        osc1.frequency.setValueAtTime(265, now + 0.09);
+        osc1.frequency.exponentialRampToValueAtTime(195, now + totalDur);
+
+        osc2.frequency.setValueAtTime(211.5, now);
+        osc2.frequency.setValueAtTime(266.5, now + 0.09);
+        osc2.frequency.exponentialRampToValueAtTime(196, now + totalDur);
+
+        // Two Parallel Vowel Formant Filters (F1 & F2)
+        const formant1 = audioCtx.createBiquadFilter();
+        formant1.type = 'bandpass';
+        formant1.Q.value = 5.5;
+        formant1.frequency.setValueAtTime(600, now); // 'eh'
+        formant1.frequency.exponentialRampToValueAtTime(450, now + totalDur); // 'oh'
+
+        const formant2 = audioCtx.createBiquadFilter();
+        formant2.type = 'bandpass';
+        formant2.Q.value = 6.0;
+        formant2.frequency.setValueAtTime(1850, now); // 'eh'
+        formant2.frequency.exponentialRampToValueAtTime(950, now + totalDur); // 'oh'
+
+        const envGain = audioCtx.createGain();
+        envGain.gain.setValueAtTime(0.001, now);
+        envGain.gain.linearRampToValueAtTime(0.85, now + 0.02);
+        envGain.gain.linearRampToValueAtTime(0.45, now + 0.08);
+        envGain.gain.linearRampToValueAtTime(0.95, now + 0.11);
+        envGain.gain.exponentialRampToValueAtTime(0.001, now + totalDur);
+
+        osc1.connect(formant1);
+        osc2.connect(formant1);
+        osc1.connect(formant2);
+        osc2.connect(formant2);
+
+        formant1.connect(envGain);
+        formant2.connect(envGain);
+        envGain.connect(inputBus);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + totalDur);
+        osc2.stop(now + totalDur);
+      }
+
+      // 3C. Synthesized Acoustic Pluck Chord
+      function triggerAcousticPluck() {
+        initAudioEngine();
+        state.lastSourceType = 'pluck';
+        setStatusBadge('Acoustic Pluck Triggered', 'cyan');
+        spawnAcousticPulse(0.9);
+
+        const now = audioCtx.currentTime;
+        const notes = [329.63, 440.0, 659.25]; // E4, A4, E5 crisp triad
+
+        notes.forEach((freq, idx) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = idx === 0 ? 'triangle' : 'sine';
+
+          const startOffset = idx * 0.015;
+          osc.frequency.setValueAtTime(freq, now + startOffset);
+
+          gain.gain.setValueAtTime(0.001, now + startOffset);
+          gain.gain.linearRampToValueAtTime(0.38, now + startOffset + 0.008);
+          gain.gain.exponentialRampToValueAtTime(0.0008, now + startOffset + 0.18);
+
+          osc.connect(gain);
+          gain.connect(inputBus);
+
+          osc.start(now + startOffset);
+          osc.stop(now + startOffset + 0.19);
+        });
+      }
+
+      // 3D. Play Custom AudioBuffer (Recorded Mic Sample or Uploaded File)
+      function playCustomBuffer(buffer, label) {
+        if (!buffer) return;
+        initAudioEngine();
+
+        if (activeSourceNode) {
+          try { activeSourceNode.stop(); } catch (e) {}
+        }
+
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(inputBus);
+        source.start(0);
+        activeSourceNode = source;
+
+        setStatusBadge(`Playing ${label}`, 'emerald');
+        spawnAcousticPulse(0.95);
+      }
+
+      // 3E. Record 2.5s Microphone Clip for Feedback-Free Classroom Replay
+      let isRecordingClip = false;
+      async function recordShortMicClip() {
+        if (isRecordingClip) return;
+        initAudioEngine();
+
+        const btnText = document.getElementById('btnRecordMicText');
+        const micDot = document.getElementById('micDot');
+        const btnPlayRec = document.getElementById('btnPlayRecorded');
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mediaRecorder = new MediaRecorder(stream);
+          const chunks = [];
+
+          isRecordingClip = true;
+          btnText.textContent = 'Speak Now (2.5s)...';
+          micDot.classList.add('animate-ping');
+          setStatusBadge('Recording Mic Sample...', 'rose');
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = async () => {
+            stream.getTracks().forEach(t => t.stop());
+            isRecordingClip = false;
+            micDot.classList.remove('animate-ping');
+            btnText.textContent = 'Re-Record Mic (2.5s)';
+
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            const arrayBuf = await blob.arrayBuffer();
+            recordedAudioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+
+            btnPlayRec.disabled = false;
+            state.lastSourceType = 'micClip';
+            playCustomBuffer(recordedAudioBuffer, 'Recorded Voice');
+          };
+
+          mediaRecorder.start();
+          setTimeout(() => {
+            if (mediaRecorder.state === 'recording') {
+              mediaRecorder.stop();
+            }
+          }, 2500);
+
+        } catch (err) {
+          isRecordingClip = false;
+          setStatusBadge('Mic Permission Denied', 'rose');
+        }
+      }
+
+      // 3F. Live Microphone Pass-Through Toggle
+      async function toggleLiveMicrophone() {
+        initAudioEngine();
+        const stateText = document.getElementById('liveMicStateText');
+        const btn = document.getElementById('btnLiveMicToggle');
+
+        if (state.liveMicActive) {
+          if (liveMicSourceNode) {
+            liveMicSourceNode.disconnect();
+            liveMicSourceNode = null;
+          }
+          if (liveMicStream) {
+            liveMicStream.getTracks().forEach(t => t.stop());
+            liveMicStream = null;
+          }
+          state.liveMicActive = false;
+          stateText.textContent = 'OFF';
+          stateText.className = 'text-slate-400';
+          btn.classList.remove('border-emerald-500/60', 'bg-emerald-950/40');
+          setStatusBadge('Live Mic Stopped', 'slate');
+          return;
+        }
+
+        try {
+          liveMicStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false
+            }
+          });
+          liveMicSourceNode = audioCtx.createMediaStreamSource(liveMicStream);
+          liveMicSourceNode.connect(inputBus);
+          state.liveMicActive = true;
+          stateText.textContent = 'ON (LIVE)';
+          stateText.className = 'text-emerald-400';
+          btn.classList.add('border-emerald-500/60', 'bg-emerald-950/40');
+          setStatusBadge('Live Mic Active (Use Headphones)', 'emerald');
+        } catch (err) {
+          setStatusBadge('Mic Access Blocked', 'rose');
+        }
+      }
+
+      // ==========================================
+      // 4. UI CONTROLS & COUPLED PHYSICS LOGIC
+      // ==========================================
+      const sliderDistance = document.getElementById('sliderDistance');
+      const sliderTau = document.getElementById('sliderTau');
+      const sliderAlpha = document.getElementById('sliderAlpha');
+
+      function updateFromDistance(newDist) {
+        state.distance = parseFloat(newDist);
+        // τ = 2d / 343
+        state.tau = (2 * state.distance) / SPEED_OF_SOUND;
+        sliderTau.value = state.tau.toFixed(3);
+        refreshUIReadouts();
+        syncAudioGraphParams();
+      }
+
+      function updateFromTau(newTau) {
+        state.tau = parseFloat(newTau);
+        // d = (τ * 343) / 2
+        state.distance = (state.tau * SPEED_OF_SOUND) / 2;
+        sliderDistance.value = state.distance.toFixed(1);
+        refreshUIReadouts();
+        syncAudioGraphParams();
+      }
+
+      function updateFromAlpha(newAlpha) {
+        state.alpha = parseFloat(newAlpha);
+        refreshUIReadouts();
+        syncAudioGraphParams();
+      }
+
+      function refreshUIReadouts() {
+        const tauMs = Math.round(state.tau * 1000);
+        const tauSecStr = state.tau.toFixed(3);
+        const alphaStr = state.alpha.toFixed(2);
+
+        // Slider labels
+        document.getElementById('valDistance').textContent = state.distance.toFixed(1);
+        document.getElementById('valRoundTrip').textContent = (state.distance * 2).toFixed(1);
+        document.getElementById('valTauSec').textContent = tauSecStr;
+        document.getElementById('valTauMs').textContent = tauMs;
+        document.getElementById('valAlpha').textContent = alphaStr;
+
+        const dbVal = state.alpha > 0.001 ? (20 * Math.log10(state.alpha)).toFixed(1) + ' dB' : '-∞ dB';
+        document.getElementById('valAlphaDb').textContent = dbVal;
+
+        // Top Equation Banner
+        document.getElementById('eqAlphaVal').textContent = alphaStr;
+        document.getElementById('eqTauVal').textContent = tauSecStr + 's';
+        document.getElementById('eqImpulseAlpha').textContent = alphaStr;
+        document.getElementById('eqImpulseTau').textContent = tauSecStr + 's';
+
+        const eqDirectTerm = document.getElementById('eqDirectTerm');
+        const eqEchoTerm = document.getElementById('eqEchoTerm');
+        const eqPlusSign = document.getElementById('eqPlusSign');
+        const eqFeedbackTerm = document.getElementById('eqFeedbackTerm');
+
+        eqDirectTerm.style.opacity = state.directEnabled ? '1' : '0.25';
+        eqEchoTerm.style.opacity = state.echoEnabled ? '1' : '0.25';
+        eqPlusSign.style.opacity = (state.directEnabled && state.echoEnabled) ? '1' : '0.35';
+
+        if (state.multiFeedback && state.echoEnabled) {
+          eqFeedbackTerm.classList.remove('hidden');
+          document.getElementById('systemTypeLabel').textContent = 'IIR (Multi-Wall Feedback)';
+          document.getElementById('systemTypeLabel').className = 'text-purple-400 font-semibold';
+        } else {
+          eqFeedbackTerm.classList.add('hidden');
+          document.getElementById('systemTypeLabel').textContent = 'FIR (Single Reflection)';
+          document.getElementById('systemTypeLabel').className = 'text-cyan-400 font-semibold';
+        }
+
+        // Visualizer annotations
+        document.getElementById('geomDelayLabel').textContent = tauMs;
+        document.getElementById('scopeDelayText').textContent = tauMs + ' ms';
+        document.getElementById('scopeAlphaText').textContent = alphaStr;
+      }
+
+      function setStatusBadge(text, color) {
+        const badge = document.getElementById('audioStatusBadge');
+        badge.textContent = text;
+        badge.className = `text-xs font-mono px-2.5 py-0.5 rounded-full bg-${color}-500/15 text-${color}-300 border border-${color}-500/40`;
+      }
+
+      // Wire Sliders
+      sliderDistance.addEventListener('input', (e) => updateFromDistance(e.target.value));
+      sliderTau.addEventListener('input', (e) => updateFromTau(e.target.value));
+      sliderAlpha.addEventListener('input', (e) => updateFromAlpha(e.target.value));
+
+      // Wire Presentation Presets
+      const PRESETS = {
+        slide:  { d: 17.0, alpha: 0.60 }, // Slide Example: 17m -> 34m extra -> ~0.1s
+        room:   { d: 6.0,  alpha: 0.70 }, // Small empty room: 6m -> 35ms slapback
+        hall:   { d: 43.0, alpha: 0.50 }, // Empty hall: 43m -> 250ms echo
+        canyon: { d: 103.0, alpha: 0.45 } // Mountain canyon: 103m -> 600ms echo
+      };
+
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const key = btn.getAttribute('data-preset');
+          const p = PRESETS[key];
+          if (!p) return;
+
+          sliderDistance.value = p.d;
+          sliderAlpha.value = p.alpha;
+          state.alpha = p.alpha;
+          updateFromDistance(p.d);
+
+          // Highlight active preset button
+          document.querySelectorAll('.preset-btn').forEach(b => {
+            b.className = 'preset-btn px-2.5 py-2 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700/70 transition text-left';
+          });
+          btn.className = 'preset-btn px-2.5 py-2 rounded-lg text-xs font-medium bg-cyan-500/20 text-cyan-200 border border-cyan-500/50 hover:bg-cyan-500/30 transition text-left';
+
+          // Automatically trigger sound so audience hears the preset immediately
+          triggerCurrentDefaultSound();
+        });
+      });
+
+      function triggerCurrentDefaultSound() {
+        if (state.lastSourceType === 'voice') triggerVocalShout();
+        else if (state.lastSourceType === 'pluck') triggerAcousticPluck();
+        else if (state.lastSourceType === 'micClip' && recordedAudioBuffer) playCustomBuffer(recordedAudioBuffer, 'Recorded Voice');
+        else if (state.lastSourceType === 'file' && uploadedAudioBuffer) playCustomBuffer(uploadedAudioBuffer, 'Audio File');
+        else triggerImpulseClap();
+      }
+
+      // Wire Trigger Buttons
+      document.getElementById('btnTriggerClap').addEventListener('click', triggerImpulseClap);
+      document.getElementById('btnTriggerVoiceSynth').addEventListener('click', triggerVocalShout);
+      document.getElementById('btnTriggerPluck').addEventListener('click', triggerAcousticPluck);
+      document.getElementById('btnRecordMic').addEventListener('click', recordShortMicClip);
+      document.getElementById('btnPlayRecorded').addEventListener('click', () => {
+        state.lastSourceType = 'micClip';
+        playCustomBuffer(recordedAudioBuffer, 'Recorded Voice');
+      });
+      document.getElementById('btnLiveMicToggle').addEventListener('click', toggleLiveMicrophone);
+
+      // Wire Custom File Upload
+      document.getElementById('fileUploadInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        initAudioEngine();
+
+        const label = document.getElementById('fileUploadLabel');
+        const btnPlay = document.getElementById('btnPlayUploaded');
+        label.textContent = file.name;
+
+        try {
+          const arrayBuf = await file.arrayBuffer();
+          uploadedAudioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+          btnPlay.disabled = false;
+          state.lastSourceType = 'file';
+          playCustomBuffer(uploadedAudioBuffer, file.name);
+        } catch (err) {
+          setStatusBadge('Unsupported Audio Format', 'rose');
+        }
+      });
+
+      document.getElementById('btnPlayUploaded').addEventListener('click', () => {
+        state.lastSourceType = 'file';
+        playCustomBuffer(uploadedAudioBuffer, 'Audio File');
+      });
+
+      // Auto-Repeat Loop Toggle
+      document.getElementById('chkAutoLoop').addEventListener('change', (e) => {
+        state.autoLoop = e.target.checked;
+        if (state.autoLoop) {
+          triggerCurrentDefaultSound();
+          autoLoopTimer = setInterval(() => {
+            if (state.autoLoop) triggerCurrentDefaultSound();
+          }, 2200);
+        } else {
+          clearInterval(autoLoopTimer);
+        }
+      });
+
+      // Superposition Branch Toggles
+      document.getElementById('btnToggleDirect').addEventListener('click', () => {
+        state.directEnabled = !state.directEnabled;
+        const btn = document.getElementById('btnToggleDirect');
+        const badge = document.getElementById('badgeDirect');
+        if (state.directEnabled) {
+          btn.className = 'flex items-center justify-between p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/50 text-left transition';
+          badge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-cyan-400 text-slate-950';
+          badge.textContent = 'ON';
+        } else {
+          btn.className = 'flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/70 text-left transition opacity-60';
+          badge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-slate-700 text-slate-400';
+          badge.textContent = 'MUTED';
+        }
+        refreshUIReadouts();
+        syncAudioGraphParams();
+      });
+
+      document.getElementById('btnToggleEcho').addEventListener('click', () => {
+        state.echoEnabled = !state.echoEnabled;
+        const btn = document.getElementById('btnToggleEcho');
+        const badge = document.getElementById('badgeEcho');
+        if (state.echoEnabled) {
+          btn.className = 'flex items-center justify-between p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/50 text-left transition';
+          badge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-400 text-slate-950';
+          badge.textContent = 'ON';
+        } else {
+          btn.className = 'flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/70 text-left transition opacity-60';
+          badge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-slate-700 text-slate-400';
+          badge.textContent = 'MUTED';
+        }
+        refreshUIReadouts();
+        syncAudioGraphParams();
+      });
+
+      document.getElementById('btnToggleFeedback').addEventListener('click', () => {
+        state.multiFeedback = !state.multiFeedback;
+        const btn = document.getElementById('btnToggleFeedback');
+        const badge = document.getElementById('badgeFeedback');
+        if (state.multiFeedback) {
+          btn.className = 'flex items-center justify-between p-2.5 rounded-xl bg-purple-500/15 border border-purple-500/50 text-left transition';
+          badge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-purple-400 text-slate-950';
+          badge.textContent = 'MULTI';
+        } else {
+          btn.className = 'flex items-center justify-between p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-left transition';
+          badge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-slate-700 text-slate-300';
+          badge.textContent = '1 ECHO';
+        }
+        refreshUIReadouts();
+        syncAudioGraphParams();
+      });
+
+      // Freeze Scope Button
+      document.getElementById('btnFreezeScope').addEventListener('click', () => {
+        state.scopeFrozen = !state.scopeFrozen;
+        const btn = document.getElementById('btnFreezeScope');
+        if (state.scopeFrozen) {
+          btn.textContent = '▶ Resume Graph';
+          btn.className = 'ml-1 px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/50 transition text-[11px] font-semibold';
+        } else {
+          btn.textContent = '⏸ Freeze Graph';
+          btn.className = 'ml-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition text-[11px]';
+        }
+      });
+
+      // ==========================================
+      // 5. THREE REAL-TIME HTML5 CANVAS VISUALIZERS
+      // ==========================================
+      const canvasRoom = document.getElementById('canvasRoom');
+      const canvasImpulse = document.getElementById('canvasImpulse');
+      const canvasScope = document.getElementById('canvasScope');
+
+      const ctxRoom = canvasRoom.getContext('2d');
+      const ctxImpulse = canvasImpulse.getContext('2d');
+      const ctxScope = canvasScope.getContext('2d');
+
+      function resizeAllCanvases() {
+        [canvasRoom, canvasImpulse, canvasScope].forEach(canvas => {
+          const dpr = window.devicePixelRatio || 1;
+          const rect = canvas.parentElement.getBoundingClientRect();
+          canvas.width = rect.width * dpr;
+          canvas.height = rect.height * dpr;
+          const ctx = canvas.getContext('2d');
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        });
+      }
+      window.addEventListener('resize', resizeAllCanvases);
+
+      // ------------------------------------------
+      // CANVAS 1: ACOUSTIC ROOM PROPAGATION DIAGRAM
+      // ------------------------------------------
+      function drawRoomGeometry(dt) {
+        const w = canvasRoom.parentElement.clientWidth;
+        const h = canvasRoom.parentElement.clientHeight;
+        ctxRoom.clearRect(0, 0, w, h);
+
+        // Background subtle ruler grid
+        ctxRoom.strokeStyle = 'rgba(51, 65, 85, 0.25)';
+        ctxRoom.lineWidth = 1;
+        for (let x = 40; x < w; x += 40) {
+          ctxRoom.beginPath();
+          ctxRoom.moveTo(x, 0);
+          ctxRoom.lineTo(x, h);
+          ctxRoom.stroke();
+        }
+
+        const leftMargin = 65;
+        const rightMargin = w - 45;
+        const maxTrackPx = rightMargin - leftMargin;
+
+        // Map Wall Distance d (1.5m to 150m) to pixel position using a smooth non-linear scale so 17m is clearly visible
+        const normDist = Math.pow((state.distance - 1.5) / (150 - 1.5), 0.65);
+        const wallX = leftMargin + 70 + normDist * (maxTrackPx - 70);
+        const centerY = h * 0.52;
+
+        // Draw Distance Dimension Arrow at Bottom
+        const dimY = h - 22;
+        ctxRoom.strokeStyle = 'rgba(148, 163, 184, 0.5)';
+        ctxRoom.lineWidth = 1.5;
+        ctxRoom.beginPath();
+        ctxRoom.moveTo(leftMargin, dimY);
+        ctxRoom.lineTo(wallX, dimY);
+        ctxRoom.stroke();
+
+        ctxRoom.fillStyle = '#94a3b8';
+        ctxRoom.font = '600 11px "JetBrains Mono", monospace';
+        ctxRoom.textAlign = 'center';
+        ctxRoom.fillText(
+          `d = ${state.distance.toFixed(1)} m  (Extra Path 2d = ${(state.distance * 2).toFixed(1)} m  ⇒  τ = ${Math.round(state.tau * 1000)} ms)`,
+          (leftMargin + wallX) / 2,
+          dimY - 6
+        );
+
+        // Draw Reflected Path Guide Lines (Source -> Wall -> Listener)
+        ctxRoom.setLineDash([5, 5]);
+        ctxRoom.strokeStyle = state.echoEnabled ? 'rgba(245, 158, 11, 0.45)' : 'rgba(100, 116, 139, 0.2)';
+        ctxRoom.lineWidth = 2;
+        ctxRoom.beginPath();
+        ctxRoom.moveTo(leftMargin, centerY - 12);
+        ctxRoom.lineTo(wallX - 6, centerY - 12);
+        ctxRoom.lineTo(leftMargin, centerY + 14);
+        ctxRoom.stroke();
+        ctxRoom.setLineDash([]);
+
+        // Draw Reflective Wall Surface
+        const wallTop = 18;
+        const wallBottom = h - 34;
+        const gradWall = ctxRoom.createLinearGradient(wallX - 6, 0, wallX + 14, 0);
+        gradWall.addColorStop(0, '#f59e0b');
+        gradWall.addColorStop(1, '#1e293b');
+        ctxRoom.fillStyle = gradWall;
+        ctxRoom.fillRect(wallX - 4, wallTop, 12, wallBottom - wallTop);
+
+        // Wall Hatch Lines
+        ctxRoom.strokeStyle = '#fbbf24';
+        ctxRoom.lineWidth = 1;
+        for (let y = wallTop + 4; y < wallBottom; y += 10) {
+          ctxRoom.beginPath();
+          ctxRoom.moveTo(wallX + 8, y);
+          ctxRoom.lineTo(wallX + 16, y - 6);
+          ctxRoom.stroke();
+        }
+
+        // Wall Label
+        ctxRoom.fillStyle = '#fbbf24';
+        ctxRoom.font = '700 11px "Inter", sans-serif';
+        ctxRoom.textAlign = 'center';
+        ctxRoom.fillText('WALL', wallX + 2, wallTop - 4);
+
+        // Draw Source / Listener Node on Left
+        ctxRoom.fillStyle = '#0f172a';
+        ctxRoom.strokeStyle = '#22d3ee';
+        ctxRoom.lineWidth = 2.5;
+        ctxRoom.beginPath();
+        ctxRoom.arc(leftMargin, centerY, 20, 0, Math.PI * 2);
+        ctxRoom.fill();
+        ctxRoom.stroke();
+
+        ctxRoom.fillStyle = '#22d3ee';
+        ctxRoom.font = '700 10px "Inter", sans-serif';
+        ctxRoom.textAlign = 'center';
+        ctxRoom.fillText('SOURCE', leftMargin, centerY - 26);
+        ctxRoom.fillStyle = '#e2e8f0';
+        ctxRoom.font = '14px sans-serif';
+        ctxRoom.fillText('🗣️🎧', leftMargin, centerY + 5);
+
+        // Update & Render Travelling Wave Pulses
+        const travelSpan = wallX - leftMargin;
+        for (let i = state.wavePulses.length - 1; i >= 0; i--) {
+          const p = state.wavePulses[i];
+          p.elapsed += dt;
+
+          // 1. Direct Pulse Flash at Source (t = 0)
+          if (state.directEnabled && p.elapsed < 0.16) {
+            const alphaFlash = 1 - (p.elapsed / 0.16);
+            ctxRoom.strokeStyle = `rgba(34, 211, 238, ${alphaFlash})`;
+            ctxRoom.lineWidth = 3;
+            ctxRoom.beginPath();
+            ctxRoom.arc(leftMargin, centerY, 22 + p.elapsed * 90, 0, Math.PI * 2);
+            ctxRoom.stroke();
+          }
+
+          // 2. Reflected Wavefront Propagation (0 to τ)
+          const progress = p.elapsed / state.tau;
+          if (state.echoEnabled && progress <= 1.0) {
+            let waveX, waveY, isReturning;
+            if (progress <= 0.5) {
+              // Outbound towards wall
+              const leg = progress * 2;
+              waveX = leftMargin + leg * travelSpan;
+              waveY = centerY - 12;
+              isReturning = false;
+            } else {
+              // Bounced off wall, returning to listener
+              const leg = (progress - 0.5) * 2;
+              waveX = wallX - leg * travelSpan;
+              waveY = centerY + 14;
+              isReturning = true;
+            }
+
+            // Draw glowing acoustic wave packet
+            ctxRoom.fillStyle = isReturning ? '#f59e0b' : '#38bdf8';
+            ctxRoom.beginPath();
+            ctxRoom.arc(waveX, waveY, isReturning ? 7 * Math.max(0.35, state.alpha) : 7, 0, Math.PI * 2);
+            ctxRoom.fill();
+
+            // Wavefront arc
+            ctxRoom.strokeStyle = isReturning ? 'rgba(245, 158, 11, 0.85)' : 'rgba(56, 189, 248, 0.85)';
+            ctxRoom.lineWidth = 2.5;
+            ctxRoom.beginPath();
+            const arcAngle = isReturning ? Math.PI : 0;
+            ctxRoom.arc(waveX, waveY, 13, arcAngle - 0.8, arcAngle + 0.8);
+            ctxRoom.stroke();
+          } else if (state.echoEnabled && p.elapsed >= state.tau && p.elapsed < state.tau + 0.18) {
+            // Echo Arrival Ring at Listener
+            const ringProg = (p.elapsed - state.tau) / 0.18;
+            ctxRoom.strokeStyle = `rgba(245, 158, 11, ${(1 - ringProg) * state.alpha})`;
+            ctxRoom.lineWidth = 3;
+            ctxRoom.beginPath();
+            ctxRoom.arc(leftMargin, centerY, 22 + ringProg * 30, 0, Math.PI * 2);
+            ctxRoom.stroke();
+          }
+
+          if (p.elapsed > Math.max(state.tau * 2.5, 1.5)) {
+            state.wavePulses.splice(i, 1);
+          }
+        }
+      }
+
+      // ------------------------------------------
+      // CANVAS 2: IMPULSE RESPONSE STEM PLOT h(t)
+      // ------------------------------------------
+      function drawImpulseResponse() {
+        const w = canvasImpulse.parentElement.clientWidth;
+        const h = canvasImpulse.parentElement.clientHeight;
+        ctxImpulse.clearRect(0, 0, w, h);
+
+        const padL = 52;
+        const padR = 30;
+        const padT = 26;
+        const padB = 34;
+        const plotW = w - padL - padR;
+        const plotH = h - padT - padB;
+        const baseY = padT + plotH;
+        const maxTime = 1.0; // 1.0 second axis
+
+        // Horizontal Amplitude Grid (0, 0.5, 1.0)
+        ctxImpulse.strokeStyle = 'rgba(51, 65, 85, 0.45)';
+        ctxImpulse.lineWidth = 1;
+        ctxImpulse.font = '10px "JetBrains Mono", monospace';
+        ctxImpulse.fillStyle = '#64748b';
+        ctxImpulse.textAlign = 'right';
+
+        [0, 0.5, 1.0].forEach(amp => {
+          const y = baseY - amp * plotH;
+          ctxImpulse.beginPath();
+          ctxImpulse.moveTo(padL, y);
+          ctxImpulse.lineTo(w - padR, y);
+          ctxImpulse.stroke();
+          ctxImpulse.fillText(amp.toFixed(1), padL - 8, y + 3);
+        });
+
+        // Time Axis Ticks (0.0s to 1.0s)
+        ctxImpulse.textAlign = 'center';
+        for (let t = 0; t <= 1.0; t += 0.1) {
+          const x = padL + (t / maxTime) * plotW;
+          ctxImpulse.beginPath();
+          ctxImpulse.moveTo(x, baseY);
+          ctxImpulse.lineTo(x, baseY + 5);
+          ctxImpulse.stroke();
+          ctxImpulse.fillText(t.toFixed(1) + 's', x, baseY + 18);
+        }
+
+        // Draw Delay Distance Bracket between t=0 and t=τ
+        const x0 = padL;
+        const xTau = padL + (state.tau / maxTime) * plotW;
+
+        if (state.echoEnabled) {
+          const bracketY = baseY - plotH * 0.25;
+          ctxImpulse.setLineDash([3, 3]);
+          ctxImpulse.strokeStyle = 'rgba(245, 158, 11, 0.5)';
+          ctxImpulse.beginPath();
+          ctxImpulse.moveTo(x0, bracketY);
+          ctxImpulse.lineTo(xTau, bracketY);
+          ctxImpulse.stroke();
+          ctxImpulse.setLineDash([]);
+
+          ctxImpulse.fillStyle = '#fbbf24';
+          ctxImpulse.font = '600 10px "JetBrains Mono", monospace';
+          ctxImpulse.fillText(`τ = ${(state.tau * 1000).toFixed(0)} ms`, (x0 + xTau) / 2, bracketY - 5);
+        }
+
+        // Helper to draw a Dirac Delta Stem ↑
+        function drawStem(timeSec, weight, color, labelText, muted) {
+          if (timeSec > maxTime) return;
+          const x = padL + (timeSec / maxTime) * plotW;
+          const stemTopY = baseY - weight * plotH;
+
+          ctxImpulse.save();
+          if (muted) ctxImpulse.globalAlpha = 0.22;
+
+          // Stem Line
+          ctxImpulse.strokeStyle = color;
+          ctxImpulse.lineWidth = 3.5;
+          ctxImpulse.beginPath();
+          ctxImpulse.moveTo(x, baseY);
+          ctxImpulse.lineTo(x, stemTopY);
+          ctxImpulse.stroke();
+
+          // Dirac Impulse Arrowhead / Circle Marker
+          ctxImpulse.fillStyle = color;
+          ctxImpulse.beginPath();
+          ctxImpulse.arc(x, stemTopY, 6, 0, Math.PI * 2);
+          ctxImpulse.fill();
+
+          // Label Pill
+          ctxImpulse.font = '700 11px "JetBrains Mono", monospace';
+          ctxImpulse.textAlign = timeSec < 0.08 ? 'left' : 'center';
+          const labelOffsetX = timeSec < 0.08 ? x + 10 : x;
+          const labelOffsetY = Math.max(padT + 12, stemTopY - 10);
+          ctxImpulse.fillText(labelText, labelOffsetX, labelOffsetY);
+
+          ctxImpulse.restore();
+        }
+
+        // 1. Direct Stem δ(t) at t = 0, Weight = 1.0
+        drawStem(0, 1.0, '#22d3ee', 'δ(t) [1.0]', !state.directEnabled);
+
+        // 2. First Reflected Echo Stem α δ(t - τ) at t = τ
+        drawStem(
+          state.tau,
+          state.alpha,
+          '#f59e0b',
+          `αδ(t−τ) [${state.alpha.toFixed(2)}]`,
+          !state.echoEnabled
+        );
+
+        // 3. Optional Higher-Order Multi-Wall Reflections if IIR Feedback is enabled
+        if (state.multiFeedback && state.echoEnabled) {
+          let bounceAmp = state.alpha * (state.alpha * 0.75);
+          for (let k = 2; k <= 5; k++) {
+            const tBounce = state.tau * k;
+            if (tBounce < maxTime && bounceAmp > 0.03) {
+              drawStem(tBounce, bounceAmp, '#c084fc', `α^${k}`, false);
+              bounceAmp *= (state.alpha * 0.75);
+            }
+          }
+        }
+      }
+
+      // ------------------------------------------
+      // CANVAS 3: REAL-TIME MULTI-TRACE WAVEFORM MONITOR
+      // ------------------------------------------
+      const HISTORY_LEN = 360; // ~6 seconds at 60fps
+      const histDirect = new Float32Array(HISTORY_LEN);
+      const histEcho = new Float32Array(HISTORY_LEN);
+      const histOutput = new Float32Array(HISTORY_LEN);
+      const timeDomainBuf = new Float32Array(1024);
+
+      function getPeakEnvelope(analyser) {
+        if (!analyser) return 0;
+        analyser.getFloatTimeDomainData(timeDomainBuf);
+        let maxVal = 0;
+        for (let i = 0; i < timeDomainBuf.length; i++) {
+          const v = timeDomainBuf[i];
+          if (Math.abs(v) > Math.abs(maxVal)) {
+            maxVal = v;
+          }
+        }
+        return maxVal;
+      }
+
+      function updateAndDrawOscilloscope() {
+        if (!state.scopeFrozen) {
+          // Shift rolling history buffers left by 1 frame
+          for (let i = 0; i < HISTORY_LEN - 1; i++) {
+            histDirect[i] = histDirect[i + 1];
+            histEcho[i] = histEcho[i + 1];
+            histOutput[i] = histOutput[i + 1];
+          }
+
+          if (audioCtx && audioCtx.state === 'running') {
+            histDirect[HISTORY_LEN - 1] = getPeakEnvelope(analyserDirect);
+            histEcho[HISTORY_LEN - 1] = getPeakEnvelope(analyserEcho);
+            histOutput[HISTORY_LEN - 1] = getPeakEnvelope(analyserOutput);
+          } else {
+            histDirect[HISTORY_LEN - 1] = 0;
+            histEcho[HISTORY_LEN - 1] = 0;
+            histOutput[HISTORY_LEN - 1] = 0;
+          }
+        }
+
+        const w = canvasScope.parentElement.clientWidth;
+        const h = canvasScope.parentElement.clientHeight;
+        ctxScope.clearRect(0, 0, w, h);
+
+        // Divide canvas into two clean lanes:
+        // Top Lane: Component Comparison x(t) [Cyan] vs α x(t - τ) [Amber]
+        // Bottom Lane: Combined Output y(t) = x(t) + α x(t - τ) [Emerald]
+        const midUpperY = h * 0.30;
+        const midLowerY = h * 0.76;
+        const dividerY = h * 0.53;
+
+        // Center zero-lines
+        ctxScope.strokeStyle = 'rgba(51, 65, 85, 0.5)';
+        ctxScope.lineWidth = 1;
+        ctxScope.beginPath();
+        ctxScope.moveTo(0, midUpperY);
+        ctxScope.lineTo(w, midUpperY);
+        ctxScope.moveTo(0, midLowerY);
+        ctxScope.lineTo(w, midLowerY);
+        ctxScope.stroke();
+
+        // Lane Divider
+        ctxScope.strokeStyle = 'rgba(71, 85, 105, 0.6)';
+        ctxScope.setLineDash([4, 4]);
+        ctxScope.beginPath();
+        ctxScope.moveTo(0, dividerY);
+        ctxScope.lineTo(w, dividerY);
+        ctxScope.stroke();
+        ctxScope.setLineDash([]);
+
+        // Lane Labels
+        ctxScope.font = '600 10px "JetBrains Mono", monospace';
+        ctxScope.textAlign = 'left';
+        ctxScope.fillStyle = '#38bdf8';
+        ctxScope.fillText('COMPONENTS: Direct x(t) [Cyan]  &  Delayed Echo α·x(t−τ) [Amber]', 12, 16);
+        ctxScope.fillStyle = '#34d399';
+        ctxScope.fillText('LTI OUTPUT: y(t) = x(t) + α·x(t−τ) [Emerald]', 12, dividerY + 16);
+
+        const scaleY = h * 0.21;
+
+        function drawTrace(buffer, centerY, strokeColor, fillColor) {
+          ctxScope.strokeStyle = strokeColor;
+          ctxScope.fillStyle = fillColor;
+          ctxScope.lineWidth = 2;
+
+          // Draw symmetric envelope + waveform trace for high classroom visibility
+          ctxScope.beginPath();
+          for (let i = 0; i < HISTORY_LEN; i++) {
+            const x = (i / (HISTORY_LEN - 1)) * w;
+            const amp = Math.min(1.1, Math.abs(buffer[i]));
+            const y = centerY - amp * scaleY;
+            if (i === 0) ctxScope.moveTo(x, centerY);
+            ctxScope.lineTo(x, y);
+          }
+          for (let i = HISTORY_LEN - 1; i >= 0; i--) {
+            const x = (i / (HISTORY_LEN - 1)) * w;
+            const amp = Math.min(1.1, Math.abs(buffer[i]));
+            const y = centerY + amp * scaleY;
+            ctxScope.lineTo(x, y);
+          }
+          ctxScope.closePath();
+          ctxScope.fill();
+          ctxScope.stroke();
+        }
+
+        // Top Lane: Direct x(t) and Delayed Echo α x(t - τ) overlapped so time shift τ is unmistakable
+        if (state.directEnabled) {
+          drawTrace(histDirect, midUpperY, '#22d3ee', 'rgba(34, 211, 238, 0.22)');
+        }
+        if (state.echoEnabled) {
+          drawTrace(histEcho, midUpperY, '#f59e0b', 'rgba(245, 158, 11, 0.28)');
+        }
+
+        // Bottom Lane: Combined Output y(t)
+        drawTrace(histOutput, midLowerY, '#10b981', 'rgba(16, 185, 129, 0.24)');
+      }
+
+      // ==========================================
+      // 6. MAIN ANIMATION LOOP
+      // ==========================================
+      let lastFrameTime = performance.now();
+
+      function animateLoop(now) {
+        const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
+        lastFrameTime = now;
+
+        drawRoomGeometry(dt);
+        drawImpulseResponse();
+        updateAndDrawOscilloscope();
+
+        requestAnimationFrame(animateLoop);
+      }
+
+      window.onload = function () {
+        resizeAllCanvases();
+        refreshUIReadouts();
+        // Seed one initial visual wave pulse on load so the diagram looks alive immediately
+        spawnAcousticPulse(1.0);
+        requestAnimationFrame(animateLoop);
+      };
+    })();
+  </script>
+</body>
+</html>
